@@ -1,0 +1,1890 @@
+# MBS P&L Analytics for Trading Decisions
+!pip install -q google-generativeai pandas numpy
+
+import json
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import google.generativeai as genai
+
+# Configure Gemini
+GOOGLE_API_KEY = ""  # Add your API key here
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel('gemini-2.5-flash')
+
+# Define instrument_data
+instrument_data = [
+    {
+      "CUSIP": "31453441V5",
+      "Coupon": 3.4,
+      "WAM": 187,
+      "PoolNumber": "MA8298",
+      "IssueDate": "2021-01-26",
+      "CurrentUPB": 97615.51,
+      "LoanCount": 175,
+      "CPR": 128.45,
+      "CPR1Month": 135.2,
+      "CPR3Month": 131.2,
+      "CPR6Month": 125.8,
+      "CPR12Month": 122.1,
+      "CPR24Month": 118.7,
+      "PrimaryState": "CA",
+      "StatePercentage": 55,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 32,
+      "MaturityTerm": 15,
+      "CurrentPrice": 98.25,
+      "AccruedInterest": 0.85,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3146405YFU",
+      "Coupon": 5.6,
+      "WAM": 188,
+      "PoolNumber": "MA3329",
+      "IssueDate": "2021-09-07",
+      "CurrentUPB": 70620.89,
+      "LoanCount": 107,
+      "CPR": 132.67,
+      "CPR1Month": 139.4,
+      "CPR3Month": 135.4,
+      "CPR6Month": 130.0,
+      "CPR12Month": 126.3,
+      "CPR24Month": 122.9,
+      "PrimaryState": "TX",
+      "StatePercentage": 60,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 35,
+      "MaturityTerm": 20,
+      "CurrentPrice": 95.12,
+      "AccruedInterest": 1.40,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3146791PQV",
+      "Coupon": 6.9,
+      "WAM": 152,
+      "PoolNumber": "MA7989",
+      "IssueDate": "2021-03-08",
+      "CurrentUPB": 74556.53,
+      "LoanCount": 178,
+      "CPR": 119.34,
+      "CPR1Month": 126.1,
+      "CPR3Month": 122.1,
+      "CPR6Month": 116.7,
+      "CPR12Month": 113.0,
+      "CPR24Month": 109.6,
+      "PrimaryState": "NY",
+      "StatePercentage": 50,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 33,
+      "MaturityTerm": 12,
+      "CurrentPrice": 103.20,
+      "AccruedInterest": 1.73,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3147117P2G",
+      "Coupon": 3.3,
+      "WAM": 253,
+      "PoolNumber": "MA2889",
+      "IssueDate": "2022-06-28",
+      "CurrentUPB": 65676.89,
+      "LoanCount": 187,
+      "CPR": 141.23,
+      "CPR1Month": 148.0,
+      "CPR3Month": 144.0,
+      "CPR6Month": 138.6,
+      "CPR12Month": 134.9,
+      "CPR24Month": 131.5,
+      "PrimaryState": "CA",
+      "StatePercentage": 58,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 40,
+      "MaturityTerm": 25,
+      "CurrentPrice": 98.51,
+      "AccruedInterest": 0.83,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3148009KQA",
+      "Coupon": 3.1,
+      "WAM": 261,
+      "PoolNumber": "MA6285",
+      "IssueDate": "2020-02-14",
+      "CurrentUPB": 29358.32,
+      "LoanCount": 147,
+      "CPR": 125.89,
+      "CPR1Month": 132.6,
+      "CPR3Month": 128.6,
+      "CPR6Month": 123.2,
+      "CPR12Month": 119.5,
+      "CPR24Month": 116.1,
+      "PrimaryState": "TX",
+      "StatePercentage": 52,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 38,
+      "MaturityTerm": 10,
+      "CurrentPrice": 95.08,
+      "AccruedInterest": 0.78,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3147932YRL",
+      "Coupon": 6.1,
+      "WAM": 459,
+      "PoolNumber": "MA5993",
+      "IssueDate": "2022-11-21",
+      "CurrentUPB": 26277.83,
+      "LoanCount": 191,
+      "CPR": 130.12,
+      "CPR1Month": 136.9,
+      "CPR3Month": 132.9,
+      "CPR6Month": 127.5,
+      "CPR12Month": 123.8,
+      "CPR24Month": 120.4,
+      "PrimaryState": "NY",
+      "StatePercentage": 57,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 42,
+      "MaturityTerm": 30,
+      "CurrentPrice": 101.35,
+      "AccruedInterest": 1.53,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3147862G47",
+      "Coupon": 3.8,
+      "WAM": 111,
+      "PoolNumber": "MA3970",
+      "IssueDate": "2020-08-26",
+      "CurrentUPB": 67697.61,
+      "LoanCount": 142,
+      "CPR": 115.78,
+      "CPR1Month": 122.5,
+      "CPR3Month": 118.5,
+      "CPR6Month": 113.1,
+      "CPR12Month": 109.4,
+      "CPR24Month": 106.0,
+      "PrimaryState": "CA",
+      "StatePercentage": 53,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 36,
+      "MaturityTerm": 8,
+      "CurrentPrice": 97.61,
+      "AccruedInterest": 0.95,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3142374RC8",
+      "Coupon": 6.4,
+      "WAM": 315,
+      "PoolNumber": "MA3432",
+      "IssueDate": "2019-12-25",
+      "CurrentUPB": 92816.32,
+      "LoanCount": 137,
+      "CPR": 136.45,
+      "CPR1Month": 143.2,
+      "CPR3Month": 139.2,
+      "CPR6Month": 133.8,
+      "CPR12Month": 130.1,
+      "CPR24Month": 126.7,
+      "PrimaryState": "TX",
+      "StatePercentage": 59,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 34,
+      "MaturityTerm": 15,
+      "CurrentPrice": 94.51,
+      "AccruedInterest": 1.60,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3141458HKL",
+      "Coupon": 6.4,
+      "WAM": 275,
+      "PoolNumber": "MA6986",
+      "IssueDate": "2020-12-28",
+      "CurrentUPB": 65900.44,
+      "LoanCount": 125,
+      "CPR": 123.67,
+      "CPR1Month": 130.4,
+      "CPR3Month": 126.4,
+      "CPR6Month": 121.0,
+      "CPR12Month": 117.3,
+      "CPR24Month": 113.9,
+      "PrimaryState": "NY",
+      "StatePercentage": 54,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 37,
+      "MaturityTerm": 20,
+      "CurrentPrice": 99.11,
+      "AccruedInterest": 1.60,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3147387PV9",
+      "Coupon": 4.0,
+      "WAM": 140,
+      "PoolNumber": "MA7914",
+      "IssueDate": "2021-06-29",
+      "CurrentUPB": 35001.76,
+      "LoanCount": 120,
+      "CPR": 129.34,
+      "CPR1Month": 136.1,
+      "CPR3Month": 132.1,
+      "CPR6Month": 126.7,
+      "CPR12Month": 123.0,
+      "CPR24Month": 119.6,
+      "PrimaryState": "CA",
+      "StatePercentage": 56,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 39,
+      "MaturityTerm": 10,
+      "CurrentPrice": 97.61,
+      "AccruedInterest": 1.00,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3141528SX0",
+      "Coupon": 4.9,
+      "WAM": 162,
+      "PoolNumber": "MA1818",
+      "IssueDate": "2019-02-18",
+      "CurrentUPB": 70927.06,
+      "LoanCount": 94,
+      "CPR": 118.56,
+      "CPR1Month": 125.3,
+      "CPR3Month": 121.3,
+      "CPR6Month": 115.9,
+      "CPR12Month": 112.2,
+      "CPR24Month": 108.8,
+      "PrimaryState": "TX",
+      "StatePercentage": 51,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 41,
+      "MaturityTerm": 12,
+      "CurrentPrice": 105.50,
+      "AccruedInterest": 1.23,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3149443QJ0",
+      "Coupon": 4.7,
+      "WAM": 444,
+      "PoolNumber": "MA8851",
+      "IssueDate": "2020-01-30",
+      "CurrentUPB": 65147.56,
+      "LoanCount": 65,
+      "CPR": 140.23,
+      "CPR1Month": 147.0,
+      "CPR3Month": 143.0,
+      "CPR6Month": 137.6,
+      "CPR12Month": 133.9,
+      "CPR24Month": 130.5,
+      "PrimaryState": "NY",
+      "StatePercentage": 58,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 43,
+      "MaturityTerm": 25,
+      "CurrentPrice": 94.84,
+      "AccruedInterest": 1.18,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "31483636I1",
+      "Coupon": 5.5,
+      "WAM": 251,
+      "PoolNumber": "MA5098",
+      "IssueDate": "2022-08-01",
+      "CurrentUPB": 69165.75,
+      "LoanCount": 118,
+      "CPR": 126.78,
+      "CPR1Month": 133.5,
+      "CPR3Month": 129.5,
+      "CPR6Month": 124.1,
+      "CPR12Month": 120.4,
+      "CPR24Month": 117.0,
+      "PrimaryState": "CA",
+      "StatePercentage": 55,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 44,
+      "MaturityTerm": 15,
+      "CurrentPrice": 96.63,
+      "AccruedInterest": 1.38,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "31422174XW",
+      "Coupon": 4.2,
+      "WAM": 461,
+      "PoolNumber": "MA6137",
+      "IssueDate": "2020-11-30",
+      "CurrentUPB": 94234.19,
+      "LoanCount": 162,
+      "CPR": 133.45,
+      "CPR1Month": 140.2,
+      "CPR3Month": 136.2,
+      "CPR6Month": 130.8,
+      "CPR12Month": 127.1,
+      "CPR24Month": 123.7,
+      "PrimaryState": "TX",
+      "StatePercentage": 57,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 45,
+      "MaturityTerm": 30,
+      "CurrentPrice": 99.54,
+      "AccruedInterest": 1.05,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3141634M66",
+      "Coupon": 6.3,
+      "WAM": 398,
+      "PoolNumber": "MA9180",
+      "IssueDate": "2020-12-30",
+      "CurrentUPB": 94345.65,
+      "LoanCount": 94,
+      "CPR": 121.89,
+      "CPR1Month": 128.6,
+      "CPR3Month": 124.6,
+      "CPR6Month": 119.2,
+      "CPR12Month": 115.5,
+      "CPR24Month": 112.1,
+      "PrimaryState": "NY",
+      "StatePercentage": 54,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 46,
+      "MaturityTerm": 20,
+      "CurrentPrice": 99.50,
+      "AccruedInterest": 1.58,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3143105EI1",
+      "Coupon": 6.6,
+      "WAM": 187,
+      "PoolNumber": "MA9279",
+      "IssueDate": "2019-11-18",
+      "CurrentUPB": 63639.17,
+      "LoanCount": 115,
+      "CPR": 137.12,
+      "CPR1Month": 143.9,
+      "CPR3Month": 139.9,
+      "CPR6Month": 134.5,
+      "CPR12Month": 130.8,
+      "CPR24Month": 127.4,
+      "PrimaryState": "CA",
+      "StatePercentage": 56,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 47,
+      "MaturityTerm": 10,
+      "CurrentPrice": 96.21,
+      "AccruedInterest": 1.65,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3145193MS0",
+      "Coupon": 4.1,
+      "WAM": 125,
+      "PoolNumber": "MA6748",
+      "IssueDate": "2021-01-21",
+      "CurrentUPB": 70152.54,
+      "LoanCount": 194,
+      "CPR": 116.34,
+      "CPR1Month": 123.1,
+      "CPR3Month": 119.1,
+      "CPR6Month": 113.7,
+      "CPR12Month": 110.0,
+      "CPR24Month": 106.6,
+      "PrimaryState": "TX",
+      "StatePercentage": 53,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 48,
+      "MaturityTerm": 8,
+      "CurrentPrice": 97.61,
+      "AccruedInterest": 1.03,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3147315N4R",
+      "Coupon": 6.8,
+      "WAM": 350,
+      "PoolNumber": "MA3823",
+      "IssueDate": "2020-08-17",
+      "CurrentUPB": 52280.65,
+      "LoanCount": 69,
+      "CPR": 142.56,
+      "CPR1Month": 149.3,
+      "CPR3Month": 145.3,
+      "CPR6Month": 139.9,
+      "CPR12Month": 136.2,
+      "CPR24Month": 132.8,
+      "PrimaryState": "NY",
+      "StatePercentage": 59,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 49,
+      "MaturityTerm": 25,
+      "CurrentPrice": 97.61,
+      "AccruedInterest": 1.70,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "314234334X",
+      "Coupon": 5.6,
+      "WAM": 233,
+      "PoolNumber": "MA7157",
+      "IssueDate": "2020-05-21",
+      "CurrentUPB": 28489.84,
+      "LoanCount": 120,
+      "CPR": 124.78,
+      "CPR1Month": 131.5,
+      "CPR3Month": 127.5,
+      "CPR6Month": 122.1,
+      "CPR12Month": 118.4,
+      "CPR24Month": 115.0,
+      "PrimaryState": "CA",
+      "StatePercentage": 52,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 50,
+      "MaturityTerm": 15,
+      "CurrentPrice": 100.81,
+      "AccruedInterest": 1.40,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3143450KDZ",
+      "Coupon": 3.2,
+      "WAM": 321,
+      "PoolNumber": "MA2951",
+      "IssueDate": "2018-10-16",
+      "CurrentUPB": 65208.82,
+      "LoanCount": 140,
+      "CPR": 131.23,
+      "CPR1Month": 138.0,
+      "CPR3Month": 134.0,
+      "CPR6Month": 128.6,
+      "CPR12Month": 124.9,
+      "CPR24Month": 121.5,
+      "PrimaryState": "TX",
+      "StatePercentage": 55,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 32,
+      "MaturityTerm": 20,
+      "CurrentPrice": 97.61,
+      "AccruedInterest": 0.80,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "31486968WT",
+      "Coupon": 4.0,
+      "WAM": 143,
+      "PoolNumber": "MA8910",
+      "IssueDate": "2022-02-23",
+      "CurrentUPB": 57089.97,
+      "LoanCount": 145,
+      "CPR": 119.45,
+      "CPR1Month": 126.2,
+      "CPR3Month": 122.2,
+      "CPR6Month": 116.8,
+      "CPR12Month": 113.1,
+      "CPR24Month": 109.7,
+      "PrimaryState": "NY",
+      "StatePercentage": 54,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 33,
+      "MaturityTerm": 12,
+      "CurrentPrice": 103.60,
+      "AccruedInterest": 1.00,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3149525PGL",
+      "Coupon": 6.8,
+      "WAM": 304,
+      "PoolNumber": "MA8680",
+      "IssueDate": "2019-02-08",
+      "CurrentUPB": 92151.03,
+      "LoanCount": 191,
+      "CPR": 138.67,
+      "CPR1Month": 145.4,
+      "CPR3Month": 141.4,
+      "CPR6Month": 136.0,
+      "CPR12Month": 132.3,
+      "CPR24Month": 128.9,
+      "PrimaryState": "CA",
+      "StatePercentage": 58,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 34,
+      "MaturityTerm": 25,
+      "CurrentPrice": 101.68,
+      "AccruedInterest": 1.70,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3147714PA6",
+      "Coupon": 6.6,
+      "WAM": 257,
+      "PoolNumber": "MA8516",
+      "IssueDate": "2019-05-13",
+      "CurrentUPB": 73920.95,
+      "LoanCount": 141,
+      "CPR": 127.89,
+      "CPR1Month": 134.6,
+      "CPR3Month": 130.6,
+      "CPR6Month": 125.2,
+      "CPR12Month": 121.5,
+      "CPR24Month": 118.1,
+      "PrimaryState": "TX",
+      "StatePercentage": 56,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 35,
+      "MaturityTerm": 15,
+      "CurrentPrice": 99.59,
+      "AccruedInterest": 1.65,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3149539XRW",
+      "Coupon": 5.5,
+      "WAM": 378,
+      "PoolNumber": "MA7285",
+      "IssueDate": "2019-01-25",
+      "CurrentUPB": 21109.57,
+      "LoanCount": 135,
+      "CPR": 134.12,
+      "CPR1Month": 140.9,
+      "CPR3Month": 136.9,
+      "CPR6Month": 131.5,
+      "CPR12Month": 127.8,
+      "CPR24Month": 124.4,
+      "PrimaryState": "NY",
+      "StatePercentage": 57,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 36,
+      "MaturityTerm": 20,
+      "CurrentPrice": 98.42,
+      "AccruedInterest": 1.38,
+      "LastUpdated": "2025-08-03"
+    },
+    {
+      "CUSIP": "3144232CD2",
+      "Coupon": 6.1,
+      "WAM": 241,
+      "PoolNumber": "MA8676",
+      "IssueDate": "2022-07-21",
+      "CurrentUPB": 51664.67,
+      "LoanCount": 96,
+      "CPR": 122.34,
+      "CPR1Month": 129.1,
+      "CPR3Month": 125.1,
+      "CPR6Month": 119.7,
+      "CPR12Month": 116.0,
+      "CPR24Month": 112.6,
+      "PrimaryState": "CA",
+      "StatePercentage": 53,
+      "AccrualMethod": "30/360",
+      "CouponFrequency": 12,
+      "WALA": 37,
+      "MaturityTerm": 10,
+      "CurrentPrice": 100.01,
+      "AccruedInterest": 1.53,
+      "LastUpdated": "2025-08-03"
+    }
+]
+
+# Define position_data
+position_data = [
+    {
+      "PositionId": "POS0000",
+      "CUSIP": "3149443QJ0",
+      "Status": "Open",
+      "SettlementDate": "2024-12-02",
+      "OriginalFace": 1379169.79,
+      "CurrentFace": 562182.3,
+      "NoYears": 10,
+      "Book": "A101",
+      "StartingFace": 1351586.39,
+      "10YearEquivalence": 534073.19,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": -1037392.92
+    },
+   {
+      "PositionId": "POS0001",
+      "CUSIP": "3142374RC8",
+      "Status": "Closed",
+      "SettlementDate": "2024-12-05",
+      "OriginalFace": 3140632.75,
+      "CurrentFace": 2205359.69,
+      "NoYears": 20,
+      "Book": "B123",
+      "StartingFace": 3077819.10,
+      "10YearEquivalence": 2095091.71,
+      "CostBasis": 94.25,
+      "AccruedInterestAtPurchase": 1.20,
+      "PurchaseDate": "2024-11-20",
+      "AverageCost": 95.45,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0002",
+      "CUSIP": "3141458HKL",
+      "Status": "Open",
+      "SettlementDate": "2024-12-11",
+      "OriginalFace": 1598894.55,
+      "CurrentFace": 819895.1,
+      "NoYears": 20,
+      "Book": "R345",
+      "StartingFace": 1566916.66,
+      "10YearEquivalence": 778900.35,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 2104660.86
+    },
+    {
+      "PositionId": "POS0003",
+      "CUSIP": "3142374RC8",
+      "Status": "Open",
+      "SettlementDate": "2024-12-19",
+      "OriginalFace": 1808077.09,
+      "CurrentFace": 2583592.06,
+      "NoYears": 10,
+      "Book": "A101",
+      "StartingFace": 1771915.55,
+      "10YearEquivalence": 2454412.46,
+      "CostBasis": 94.25,
+      "AccruedInterestAtPurchase": 1.20,
+      "PurchaseDate": "2024-11-20",
+      "AverageCost": 95.45,
+      "UnrealizedPnL": 6146.49
+    },
+    {
+      "PositionId": "POS0004",
+      "CUSIP": "31483636I1",
+      "Status": "Open",
+      "SettlementDate": "2024-12-20",
+      "OriginalFace": 3426626.96,
+      "CurrentFace": 2277172.98,
+      "NoYears": 10,
+      "Book": "B123",
+      "StartingFace": 3358094.42,
+      "10YearEquivalence": 2163314.33,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 293424.88
+    },
+    {
+      "PositionId": "POS0005",
+      "CUSIP": "3149539XRW",
+      "Status": "Closed",
+      "SettlementDate": "2025-01-10",
+      "OriginalFace": 3774970.15,
+      "CurrentFace": 1769788.14,
+      "NoYears": 5,
+      "Book": "R345",
+      "StartingFace": 3699470.75,
+      "10YearEquivalence": 1681298.73,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0006",
+      "CUSIP": "314234334X",
+      "Status": "Closed",
+      "SettlementDate": "2025-01-13",
+      "OriginalFace": 1598362.28,
+      "CurrentFace": 2950981.55,
+      "NoYears": 20,
+      "Book": "A101",
+      "StartingFace": 1566395.03,
+      "10YearEquivalence": 2803432.47,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0007",
+      "CUSIP": "3147714PA6",
+      "Status": "Open",
+      "SettlementDate": "2025-01-17",
+      "OriginalFace": 3110288.28,
+      "CurrentFace": 4124707.44,
+      "NoYears": 5,
+      "Book": "B123",
+      "StartingFace": 3048082.51,
+      "10YearEquivalence": 3918472.07,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 13028357.26
+    },
+    {
+      "PositionId": "POS0008",
+      "CUSIP": "3141528SX0",
+      "Status": "Closed",
+      "SettlementDate": "2025-01-27",
+      "OriginalFace": 2708408.08,
+      "CurrentFace": 1390420.19,
+      "NoYears": 20,
+      "Book": "R345",
+      "StartingFace": 2654239.92,
+      "10YearEquivalence": 1320899.18,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0009",
+      "CUSIP": "3143105EI1",
+      "Status": "Closed",
+      "SettlementDate": "2025-02-03",
+      "OriginalFace": 1650315.38,
+      "CurrentFace": 2423578.92,
+      "NoYears": 10,
+      "Book": "A101",
+      "StartingFace": 1617309.07,
+      "10YearEquivalence": 2302400.97,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0010",
+      "CUSIP": "3141458HKL",
+      "Status": "Open",
+      "SettlementDate": "2025-02-10",
+      "OriginalFace": 2240531.62,
+      "CurrentFace": 3831953.09,
+      "NoYears": 10,
+      "Book": "B123",
+      "StartingFace": 2195720.99,
+      "10YearEquivalence": 3640355.44,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 10160073.29
+    },
+    {
+      "PositionId": "POS0011",
+      "CUSIP": "3148009KQA",
+      "Status": "Closed",
+      "SettlementDate": "2025-02-17",
+      "OriginalFace": 2280979.16,
+      "CurrentFace": 1120547.46,
+      "NoYears": 10,
+      "Book": "R345",
+      "StartingFace": 2235359.58,
+      "10YearEquivalence": 1064520.09,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0012",
+      "CUSIP": "3149443QJ0",
+      "Status": "Open",
+      "SettlementDate": "2025-02-27",
+      "OriginalFace": 4291453.1,
+      "CurrentFace": 2362229.54,
+      "NoYears": 5,
+      "Book": "A101",
+      "StartingFace": 4205624.04,
+      "10YearEquivalence": 2244118.06,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": -3844396.77
+    },
+    {
+      "PositionId": "POS0013",
+      "CUSIP": "3149525PGL",
+      "Status": "Open",
+      "SettlementDate": "2025-03-12",
+      "OriginalFace": 2134021.72,
+      "CurrentFace": 2747575.99,
+      "NoYears": 5,
+      "Book": "B123",
+      "StartingFace": 2091341.29,
+      "10YearEquivalence": 2610197.19,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 1489469.02
+    },
+    {
+      "PositionId": "POS0014",
+      "CUSIP": "31422174XW",
+      "Status": "Closed",
+      "SettlementDate": "2025-03-25",
+      "OriginalFace": 2097717.75,
+      "CurrentFace": 2412542.43,
+      "NoYears": 20,
+      "Book": "R345",
+      "StartingFace": 2055763.40,
+      "10YearEquivalence": 2291915.31,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0015",
+      "CUSIP": "3141458HKL",
+      "Status": "Open",
+      "SettlementDate": "2025-03-31",
+      "OriginalFace": 1368465.51,
+      "CurrentFace": 1285682.28,
+      "NoYears": 10,
+      "Book": "A101",
+      "StartingFace": 1341096.20,
+      "10YearEquivalence": 1221398.17,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 3308057.51
+    },
+    {
+      "PositionId": "POS0016",
+      "CUSIP": "3147932YRL",
+      "Status": "Open",
+      "SettlementDate": "2025-03-31",
+      "OriginalFace": 4239018.29,
+      "CurrentFace": 1123014.34,
+      "NoYears": 5,
+      "Book": "B123",
+      "StartingFace": 4154235.92,
+      "10YearEquivalence": 1066863.62,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 5480993.12
+    },
+    {
+      "PositionId": "POS0017",
+      "CUSIP": "3141528SX0",
+      "Status": "Open",
+      "SettlementDate": "2025-04-03",
+      "OriginalFace": 1351217.09,
+      "CurrentFace": 3573074.11,
+      "NoYears": 5,
+      "Book": "R345",
+      "StartingFace": 1324192.75,
+      "10YearEquivalence": 3394420.40,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 32193386.34
+    },
+    {
+      "PositionId": "POS0018",
+      "CUSIP": "3149525PGL",
+      "Status": "Closed",
+      "SettlementDate": "2025-04-10",
+      "OriginalFace": 4772018.49,
+      "CurrentFace": 2897053.27,
+      "NoYears": 5,
+      "Book": "A101",
+      "StartingFace": 4676578.12,
+      "10YearEquivalence": 2752200.61,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0019",
+      "CUSIP": "3141458HKL",
+      "Status": "Open",
+      "SettlementDate": "2025-04-28",
+      "OriginalFace": 3534855.05,
+      "CurrentFace": 3194527.54,
+      "NoYears": 20,
+      "Book": "B123",
+      "StartingFace": 3464157.95,
+      "10YearEquivalence": 3034801.16,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 8431322.76
+    },
+    {
+      "PositionId": "POS0020",
+      "CUSIP": "3149539XRW",
+      "Status": "Open",
+      "SettlementDate": "2025-04-28",
+      "OriginalFace": 1857389.05,
+      "CurrentFace": 2419103.94,
+      "NoYears": 10,
+      "Book": "R345",
+      "StartingFace": 1820241.27,
+      "10YearEquivalence": 2298148.74,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 4631776.56
+    },
+    {
+      "PositionId": "POS0021",
+      "CUSIP": "3149525PGL",
+      "Status": "Open",
+      "SettlementDate": "2025-05-07",
+      "OriginalFace": 568105.25,
+      "CurrentFace": 2575204.0,
+      "NoYears": 10,
+      "Book": "A101",
+      "StartingFace": 556743.15,
+      "10YearEquivalence": 2446443.80,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 1397166.08
+    },
+    {
+      "PositionId": "POS0022",
+      "CUSIP": "3143105EI1",
+      "Status": "Open",
+      "SettlementDate": "2025-05-09",
+      "OriginalFace": 2373358.14,
+      "CurrentFace": 2209719.66,
+      "NoYears": 10,
+      "Book": "B123",
+      "StartingFace": 2325891.98,
+      "10YearEquivalence": 2099233.68,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": -625042.99
+    },
+    {
+      "PositionId": "POS0023",
+      "CUSIP": "31483636I1",
+      "Status": "Closed",
+      "SettlementDate": "2025-05-15",
+      "OriginalFace": 3748555.84,
+      "CurrentFace": 1033226.78,
+      "NoYears": 20,
+      "Book": "R345",
+      "StartingFace": 3673584.72,
+      "10YearEquivalence": 981565.44,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 0.0
+    },
+    {
+      "PositionId": "POS0024",
+      "CUSIP": "3147932YRL",
+      "Status": "Open",
+      "SettlementDate": "2025-05-16",
+      "OriginalFace": 560901.35,
+      "CurrentFace": 1612862.6,
+      "NoYears": 10,
+      "Book": "A101",
+      "StartingFace": 549683.32,
+      "10YearEquivalence": 1532219.47,
+      "CostBasis": 96.50,
+      "AccruedInterestAtPurchase": 0.75,
+      "PurchaseDate": "2024-11-15",
+      "AverageCost": 97.25,
+      "UnrealizedPnL": 7887458.81
+    }
+]
+
+# Define price_data
+price_data = [
+    {
+      "PriceId": "PR0000",
+      "CUSIP": "31483636I1",
+      "BusinessDate": "2024-12-09",
+      "OpenPrice": 97.61,
+      "ClosePrice": 96.63,
+      "AccruedInterest": 1.38,
+      "CleanPrice": 95.25,
+      "DirtyPrice": 96.63
+    },
+   {
+      "PriceId": "PR0001",
+      "CUSIP": "3147714PA6",
+      "BusinessDate": "2024-12-09",
+      "OpenPrice": 98.6,
+      "ClosePrice": 99.59,
+      "AccruedInterest": 1.65,
+      "CleanPrice": 97.94,
+      "DirtyPrice": 99.59
+    },
+    {
+      "PriceId": "PR0002",
+      "CUSIP": "3147117P2G",
+      "BusinessDate": "2024-12-10",
+      "OpenPrice": 99.5,
+      "ClosePrice": 98.51,
+      "AccruedInterest": 0.83,
+      "CleanPrice": 97.68,
+      "DirtyPrice": 98.51
+    },
+    {
+      "PriceId": "PR0003",
+      "CUSIP": "3144232CD2",
+      "BusinessDate": "2024-12-23",
+      "OpenPrice": 99.03,
+      "ClosePrice": 100.01,
+      "AccruedInterest": 1.53,
+      "CleanPrice": 98.48,
+      "DirtyPrice": 100.01
+    },
+    {
+      "PriceId": "PR0004",
+      "CUSIP": "3142374RC8",
+      "BusinessDate": "2024-12-27",
+      "OpenPrice": 95.46,
+      "ClosePrice": 94.51,
+      "AccruedInterest": 1.60,
+      "CleanPrice": 92.91,
+      "DirtyPrice": 94.51
+    },
+    {
+      "PriceId": "PR0005",
+      "CUSIP": "3147932YRL",
+      "BusinessDate": "2025-01-20",
+      "OpenPrice": 100.35,
+      "ClosePrice": 101.35,
+      "AccruedInterest": 1.53,
+      "CleanPrice": 99.82,
+      "DirtyPrice": 101.35
+    },
+    {
+      "PriceId": "PR0006",
+      "CUSIP": "3149443QJ0",
+      "BusinessDate": "2025-01-21",
+      "OpenPrice": 95.8,
+      "ClosePrice": 94.84,
+      "AccruedInterest": 1.18,
+      "CleanPrice": 93.66,
+      "DirtyPrice": 94.84
+    },
+    {
+      "PriceId": "PR0007",
+      "CUSIP": "31453441V5",
+      "BusinessDate": "2025-01-27",
+      "OpenPrice": 102.05,
+      "ClosePrice": 103.07,
+      "AccruedInterest": 0.85,
+      "CleanPrice": 102.22,
+      "DirtyPrice": 103.07
+    },
+    {
+      "PriceId": "PR0008",
+      "CUSIP": "3149539XRW",
+      "BusinessDate": "2025-01-27",
+      "OpenPrice": 102.27,
+      "ClosePrice": 101.25,
+      "AccruedInterest": 1.38,
+      "CleanPrice": 99.87,
+      "DirtyPrice": 101.25
+    },
+    {
+      "PriceId": "PR0009",
+      "CUSIP": "3143105EI1",
+      "BusinessDate": "2025-02-03",
+      "OpenPrice": 95.26,
+      "ClosePrice": 96.21,
+      "AccruedInterest": 1.65,
+      "CleanPrice": 94.56,
+      "DirtyPrice": 96.21
+    },
+    {
+      "PriceId": "PR0010",
+      "CUSIP": "3146791PQV",
+      "BusinessDate": "2025-02-03",
+      "OpenPrice": 104.24,
+      "ClosePrice": 103.20,
+      "AccruedInterest": 1.73,
+      "CleanPrice": 101.47,
+      "DirtyPrice": 103.20
+    },
+    {
+      "PriceId": "PR0011",
+      "CUSIP": "3141528SX0",
+      "BusinessDate": "2025-02-07",
+      "OpenPrice": 104.46,
+      "ClosePrice": 105.50,
+      "AccruedInterest": 1.23,
+      "CleanPrice": 104.27,
+      "DirtyPrice": 105.50
+    },
+    {
+      "PriceId": "PR0012",
+      "CUSIP": "31483636I1",
+      "BusinessDate": "2025-02-26",
+      "OpenPrice": 101.07,
+      "ClosePrice": 100.06,
+      "AccruedInterest": 1.38,
+      "CleanPrice": 98.68,
+      "DirtyPrice": 100.06
+    },
+    {
+      "PriceId": "PR0013",
+      "CUSIP": "3149525PGL",
+      "BusinessDate": "2025-03-06",
+      "OpenPrice": 100.67,
+      "ClosePrice": 101.68,
+      "AccruedInterest": 1.70,
+      "CleanPrice": 99.98,
+      "DirtyPrice": 101.68
+    },
+    {
+      "PriceId": "PR0014",
+      "CUSIP": "3146405YFU",
+      "BusinessDate": "2025-03-10",
+      "OpenPrice": 95.6,
+      "ClosePrice": 94.64,
+      "AccruedInterest": 1.40,
+      "CleanPrice": 93.24,
+      "DirtyPrice": 94.64
+    },
+    {
+      "PriceId": "PR0015",
+      "CUSIP": "3148009KQA",
+      "BusinessDate": "2025-03-10",
+      "OpenPrice": 101.89,
+      "ClosePrice": 100.87,
+      "AccruedInterest": 0.78,
+      "CleanPrice": 100.09,
+      "DirtyPrice": 100.87
+    },
+    {
+      "PriceId": "PR0016",
+      "CUSIP": "31453441V5",
+      "BusinessDate": "2025-03-10",
+      "OpenPrice": 97.05,
+      "ClosePrice": 98.02,
+      "AccruedInterest": 0.85,
+      "CleanPrice": 97.17,
+      "DirtyPrice": 98.02
+    },
+    {
+      "PriceId": "PR0017",
+      "CUSIP": "314234334X",
+      "BusinessDate": "2025-04-03",
+      "OpenPrice": 101.83,
+      "ClosePrice": 100.81,
+      "AccruedInterest": 1.40,
+      "CleanPrice": 99.41,
+      "DirtyPrice": 100.81
+    },
+    {
+      "PriceId": "PR0018",
+      "CUSIP": "3142374RC8",
+      "BusinessDate": "2025-04-07",
+      "OpenPrice": 97.3,
+      "ClosePrice": 98.27,
+      "AccruedInterest": 1.60,
+      "CleanPrice": 96.67,
+      "DirtyPrice": 98.27
+    },
+    {
+      "PriceId": "PR0019",
+      "CUSIP": "3148009KQA",
+      "BusinessDate": "2025-04-09",
+      "OpenPrice": 96.04,
+      "ClosePrice": 95.08,
+      "AccruedInterest": 0.78,
+      "CleanPrice": 94.30,
+      "DirtyPrice": 95.08
+    },
+    {
+      "PriceId": "PR0020",
+      "CUSIP": "31486968WT",
+      "BusinessDate": "2025-04-14",
+      "OpenPrice": 102.57,
+      "ClosePrice": 103.60,
+      "AccruedInterest": 1.00,
+      "CleanPrice": 102.60,
+      "DirtyPrice": 103.60
+    },
+    {
+      "PriceId": "PR0021",
+      "CUSIP": "31422174XW",
+      "BusinessDate": "2025-05-12",
+      "OpenPrice": 100.55,
+      "ClosePrice": 99.54,
+      "AccruedInterest": 1.05,
+      "CleanPrice": 98.49,
+      "DirtyPrice": 99.54
+    },
+    {
+      "PriceId": "PR0022",
+      "CUSIP": "3141458HKL",
+      "BusinessDate": "2025-05-19",
+      "OpenPrice": 98.13,
+      "ClosePrice": 99.11,
+      "AccruedInterest": 1.60,
+      "CleanPrice": 97.51,
+      "DirtyPrice": 99.11
+    },
+    {
+      "PriceId": "PR0023",
+      "CUSIP": "3149539XRW",
+      "BusinessDate": "2025-05-28",
+      "OpenPrice": 99.41,
+      "ClosePrice": 98.42,
+      "AccruedInterest": 1.38,
+      "CleanPrice": 97.04,
+      "DirtyPrice": 98.42
+    },
+    {
+      "PriceId": "PR0024",
+      "CUSIP": "3147714PA6",
+      "BusinessDate": "2025-06-02",
+      "OpenPrice": 96.19,
+      "ClosePrice": 97.15,
+      "AccruedInterest": 1.65,
+      "CleanPrice": 95.50,
+      "DirtyPrice": 97.15
+    }
+]
+
+# Define trade_data
+trade_data = [
+    {
+      "TradeId": "TR0000",
+      "CUSIP": "31422174XW",
+      "PositionId": "POS0014",
+      "PriceId": "PR0021",
+      "TradeQuantity": 1778295.17,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_ICICIBank",
+      "TradeDate": "2025-05-12",
+      "TradePriceClean": 100.55,
+      "AccruedInterest": 1.05,
+      "TradePriceDirty": 101.60,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 18062237.33,
+      "RealizedPnL": 9138863.92
+    },
+	{
+      "TradeId": "TR0001",
+      "CUSIP": "3147862G47",
+      "PositionId": "POS0000",
+      "PriceId": "PR0000",
+      "TradeQuantity": 4719782.3,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_HDFCBank",
+      "TradeDate": "2024-12-13",
+      "TradePriceClean": 97.61,
+      "AccruedInterest": 0.95,
+      "TradePriceDirty": 98.56,
+      "Commission": 500.00,
+      "OtherFees": 75.00,
+      "Book": "B123",
+      "TradeNotional": 46530180.45,
+      "RealizedPnL": 1010115.27
+    },
+    {
+      "TradeId": "TR0002",
+      "CUSIP": "31422174XW",
+      "PositionId": "POS0014",
+      "PriceId": "PR0021",
+      "TradeQuantity": 381480.08,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_CentralBank",
+      "TradeDate": "2025-05-12",
+      "TradePriceClean": 100.55,
+      "AccruedInterest": 1.05,
+      "TradePriceDirty": 101.60,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "R345",
+      "TradeNotional": 3874237.61,
+      "RealizedPnL": 1960219.24
+    },
+    {
+      "TradeId": "TR0003",
+      "CUSIP": "3147932YRL",
+      "PositionId": "POS0024",
+      "PriceId": "PR0005",
+      "TradeQuantity": 3912007.41,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_HDFCBank",
+      "TradeDate": "2025-01-20",
+      "TradePriceClean": 100.35,
+      "AccruedInterest": 1.53,
+      "TradePriceDirty": 101.88,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 39843531.49,
+      "RealizedPnL": 21124218.85
+    },
+    {
+      "TradeId": "TR0004",
+      "CUSIP": "31486968WT",
+      "PositionId": "POS0020",
+      "PriceId": "PR0020",
+      "TradeQuantity": 744749.4,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_StateBankIndia",
+      "TradeDate": "2025-04-14",
+      "TradePriceClean": 102.57,
+      "AccruedInterest": 1.00,
+      "TradePriceDirty": 103.57,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "B123",
+      "TradeNotional": 7716606.84,
+      "RealizedPnL": -5282999.74
+    },
+    {
+      "TradeId": "TR0005",
+      "CUSIP": "3145193MS0",
+      "PositionId": "POS0000",
+      "PriceId": "PR0000",
+      "TradeQuantity": 1975731.3,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_CentralBank",
+      "TradeDate": "2024-12-02",
+      "TradePriceClean": 97.61,
+      "AccruedInterest": 1.03,
+      "TradePriceDirty": 98.64,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "R345",
+      "TradeNotional": 19489827.23,
+      "RealizedPnL": -423599.99
+    },
+    {
+      "TradeId": "TR0006",
+      "CUSIP": "3147387PV9",
+      "PositionId": "POS0000",
+      "PriceId": "PR0000",
+      "TradeQuantity": 1895626.02,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_HDFCBank",
+      "TradeDate": "2025-03-11",
+      "TradePriceClean": 97.61,
+      "AccruedInterest": 1.00,
+      "TradePriceDirty": 98.61,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 18687974.06,
+      "RealizedPnL": -406199.99
+    },
+    {
+      "TradeId": "TR0007",
+      "CUSIP": "3147932YRL",
+      "PositionId": "POS0016",
+      "PriceId": "PR0005",
+      "TradeQuantity": 834221.53,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_ICICIBank",
+      "TradeDate": "2025-01-20",
+      "TradePriceClean": 100.35,
+      "AccruedInterest": 1.53,
+      "TradePriceDirty": 101.88,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "B123",
+      "TradeNotional": 8499487.91,
+      "RealizedPnL": -4505999.99
+    },
+    {
+      "TradeId": "TR0008",
+      "CUSIP": "3146791PQV",
+      "PositionId": "POS0009",
+      "PriceId": "PR0010",
+      "TradeQuantity": 4848926.89,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_StateBankIndia",
+      "TradeDate": "2025-02-03",
+      "TradePriceClean": 104.24,
+      "AccruedInterest": 1.73,
+      "TradePriceDirty": 105.97,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "R345",
+      "TradeNotional": 51379272.35,
+      "RealizedPnL": 46162781.64
+    },
+    {
+      "TradeId": "TR0009",
+      "CUSIP": "3147387PV9",
+      "PositionId": "POS0000",
+      "PriceId": "PR0000",
+      "TradeQuantity": 3006658.77,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_HDFCBank",
+      "TradeDate": "2025-03-11",
+      "TradePriceClean": 97.61,
+      "AccruedInterest": 1.00,
+      "TradePriceDirty": 98.61,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 29645630.03,
+      "RealizedPnL": 631400.01
+    },
+    {
+      "TradeId": "TR0010",
+      "CUSIP": "3146405YFU",
+      "PositionId": "POS0026",
+      "PriceId": "PR0014",
+      "TradeQuantity": 3340390.91,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_StateBankIndia",
+      "TradeDate": "2025-03-10",
+      "TradePriceClean": 95.60,
+      "AccruedInterest": 1.40,
+      "TradePriceDirty": 97.00,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "B123",
+      "TradeNotional": 32401791.83,
+      "RealizedPnL": 180000.01
+    },
+    {
+      "TradeId": "TR0011",
+      "CUSIP": "3147387PV9",
+      "PositionId": "POS0000",
+      "PriceId": "PR0000",
+      "TradeQuantity": 462546.76,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_ICICIBank",
+      "TradeDate": "2025-03-11",
+      "TradePriceClean": 97.61,
+      "AccruedInterest": 1.00,
+      "TradePriceDirty": 98.61,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "R345",
+      "TradeNotional": 4560372.60,
+      "RealizedPnL": -99000.00
+    },
+    {
+      "TradeId": "TR0012",
+      "CUSIP": "3143105EI1",
+      "PositionId": "POS0009",
+      "PriceId": "PR0009",
+      "TradeQuantity": 3890665.44,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_ICICIBank",
+      "TradeDate": "2025-02-03",
+      "TradePriceClean": 95.26,
+      "AccruedInterest": 1.65,
+      "TradePriceDirty": 96.91,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 37708647.28,
+      "RealizedPnL": -5303999.98
+    },
+    {
+      "TradeId": "TR0013",
+      "CUSIP": "31453441V5",
+      "PositionId": "POS0025",
+      "PriceId": "PR0016",
+      "TradeQuantity": 3041056.75,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_ICICIBank",
+      "TradeDate": "2025-03-10",
+      "TradePriceClean": 97.05,
+      "AccruedInterest": 0.85,
+      "TradePriceDirty": 97.90,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "B123",
+      "TradeNotional": 29771945.82,
+      "RealizedPnL": -4071999.99
+    },
+    {
+      "TradeId": "TR0014",
+      "CUSIP": "3146405YFU",
+      "PositionId": "POS0026",
+      "PriceId": "PR0014",
+      "TradeQuantity": 3566417.45,
+      "Side": "Sell",
+      "CounterpartyAccountId": "CP_ICICIBank",
+      "TradeDate": "2025-03-10",
+      "TradePriceClean": 95.60,
+      "AccruedInterest": 1.40,
+      "TradePriceDirty": 97.00,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "R345",
+      "TradeNotional": 34594249.27,
+      "RealizedPnL": 192000.01
+    },
+    {
+      "TradeId": "TR0015",
+      "CUSIP": "3149539XRW",
+      "PositionId": "POS0005",
+      "PriceId": "PR0023",
+      "TradeQuantity": 4308953.73,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_StateBankIndia",
+      "TradeDate": "2025-05-28",
+      "TradePriceClean": 99.41,
+      "AccruedInterest": 1.38,
+      "TradePriceDirty": 100.79,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 43443942.29,
+      "RealizedPnL": -18287999.98
+    },
+    {
+      "TradeId": "TR0016",
+      "CUSIP": "3141634M66",
+      "PositionId": "POS0031",
+      "PriceId": "PR0027",
+      "TradeQuantity": 846075.49,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_HDFCBank",
+      "TradeDate": "2024-12-17",
+      "TradePriceClean": 99.50,
+      "AccruedInterest": 1.58,
+      "TradePriceDirty": 101.08,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "B123",
+      "TradeNotional": 8549967.45,
+      "RealizedPnL": -2099999.99
+    },
+    {
+      "TradeId": "TR0017",
+      "CUSIP": "3147862G47",
+      "PositionId": "POS0000",
+      "PriceId": "PR0000",
+      "TradeQuantity": 3802605.17,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_HDFCBank",
+      "TradeDate": "2024-12-13",
+      "TradePriceClean": 97.61,
+      "AccruedInterest": 0.95,
+      "TradePriceDirty": 98.56,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "R345",
+      "TradeNotional": 37466492.55,
+      "RealizedPnL": -814000.00
+    },
+    {
+      "TradeId": "TR0018",
+      "CUSIP": "3141528SX0",
+      "PositionId": "POS0017",
+      "PriceId": "PR0011",
+      "TradeQuantity": 1851911.43,
+      "Side": "Buy",
+      "CounterpartyAccountId": "CP_StateBankIndia",
+      "TradeDate": "2025-02-07",
+      "TradePriceClean": 104.46,
+      "AccruedInterest": 1.23,
+      "TradePriceDirty": 105.69,
+      "Commission": 250.00,
+      "OtherFees": 50.00,
+      "Book": "A101",
+      "TradeNotional": 19571867.04,
+      "RealizedPnL": -3975999.99
+    }
+]
+
+def calculate_pnl_metrics():
+    """Calculate comprehensive P&L metrics for MBS positions"""
+
+    # Convert to DataFrames
+    instruments_df = pd.DataFrame(instrument_data)
+    positions_df = pd.DataFrame(position_data)
+    prices_df = pd.DataFrame(price_data)
+    trades_df = pd.DataFrame(trade_data)
+
+    # Merge data for P&L calculation
+    pnl_data = []
+
+    for _, position in positions_df.iterrows():
+        cusip = position['CUSIP']
+
+        # Get instrument data
+        instrument = instruments_df[instruments_df['CUSIP'] == cusip].iloc[0]
+
+        # Get current price
+        current_price_data = prices_df[prices_df['CUSIP'] == cusip].iloc[-1]  # Use the latest price data
+
+        # Get trade data
+        position_trades = trades_df[trades_df['PositionId'] == position['PositionId']]
+
+        # Current values
+        current_face = position['CurrentFace']
+        current_clean_price = current_price_data['CleanPrice']
+        current_dirty_price = current_price_data['DirtyPrice']
+        current_accrued = current_price_data['AccruedInterest']
+
+        # Cost basis
+        cost_basis_clean = position['CostBasis']
+        cost_basis_dirty = position['AverageCost']
+
+        # P&L Calculations
+        # 1. Price P&L (Clean)
+        price_pnl_clean = (current_clean_price - cost_basis_clean) * current_face / 100
+
+        # 2. Price P&L (Dirty)
+        price_pnl_dirty = (current_dirty_price - cost_basis_dirty) * current_face / 100
+
+        # 3. Accrued Interest P&L
+        accrued_pnl = (current_accrued - position['AccruedInterestAtPurchase']) * current_face / 100
+
+        # 4. Total Unrealized P&L
+        total_unrealized_pnl = price_pnl_clean + accrued_pnl
+
+        # 5. Mark-to-Market Value
+        mtm_value = current_dirty_price * current_face / 100
+
+        # 6. Cost Value
+        cost_value = cost_basis_dirty * current_face / 100
+
+        # 7. Daily P&L (if we had previous day data)
+        daily_pnl = (current_price_data['ClosePrice'] - current_price_data['OpenPrice']) * current_face / 100
+
+        # 8. Trade costs
+        total_trade_costs = position_trades['Commission'].sum() + position_trades['OtherFees'].sum()
+
+        # 9. Duration-adjusted P&L risk (simplified)
+        duration_years = instrument['WAM'] / 12
+        duration_risk = abs(price_pnl_clean) * (duration_years / 100)  # 1% rate move impact
+
+        # 10. Carry (monthly coupon accrual)
+        monthly_carry = (instrument['Coupon'] / 12) * current_face / 100
+
+        pnl_record = {
+            'CUSIP': cusip,
+            'PositionId': position['PositionId'],
+            'Book': position['Book'],
+            'CurrentFace': current_face,
+            'CurrentCleanPrice': current_clean_price,
+            'CurrentDirtyPrice': current_dirty_price,
+            'CostBasisClean': cost_basis_clean,
+            'CostBasisDirty': cost_basis_dirty,
+            'PricePnL_Clean': round(price_pnl_clean, 2),
+            'PricePnL_Dirty': round(price_pnl_dirty, 2),
+            'AccruedPnL': round(accrued_pnl, 2),
+            'TotalUnrealizedPnL': round(total_unrealized_pnl, 2),
+            'MTM_Value': round(mtm_value, 2),
+            'CostValue': round(cost_value, 2),
+            'DailyPnL': round(daily_pnl, 2),
+            'TradeCosts': round(total_trade_costs, 2),
+            'DurationRisk': round(duration_risk, 2),
+            'MonthlyCarry': round(monthly_carry, 2),
+            'PnL_Percent': round((total_unrealized_pnl / cost_value) * 100, 2) if cost_value != 0 else 0,
+            'Coupon': instrument['Coupon'],
+            'WAM_Months': instrument['WAM'],
+            'CPR_Current': instrument['CPR'],
+            'State': instrument['PrimaryState']
+        }
+
+        pnl_data.append(pnl_record)
+
+    return pd.DataFrame(pnl_data)
+
+# Calculate P&L metrics
+try:
+    pnl_df = calculate_pnl_metrics()
+    print("✅ P&L calculation completed successfully!")
+    print(f"Positions analyzed: {len(pnl_df)}")
+    print(f"Total Unrealized P&L: ${pnl_df['TotalUnrealizedPnL'].sum():,.2f}")
+    print(f"Total MTM Value: ${pnl_df['MTM_Value'].sum():,.2f}")
+
+    # Display P&L summary
+    print("\n=== P&L SUMMARY BY POSITION ===")
+    for _, row in pnl_df.iterrows():
+        status = "📈 PROFIT" if row['TotalUnrealizedPnL'] > 0 else "📉 LOSS"
+        print(f"{row['CUSIP']} ({row['Book']}): ${row['TotalUnrealizedPnL']:,.2f} ({row['PnL_Percent']:.2f}%) {status}")
+
+except Exception as e:
+    print(f"❌ Error calculating P&L: {str(e)}")
+    pnl_df = pd.DataFrame()
+
+# P&L Analysis Query Interface
+import ipywidgets as widgets
+from IPython.display import display, HTML, Markdown
+
+query_box = widgets.Textarea(
+    placeholder='''Example queries:
+• "Should I hold position POS0001 for next 3-6 months based on P&L outlook?"
+• "Which positions have best risk-adjusted returns for holding period?"
+• "What are the carry vs duration risks for my current portfolio?"
+• "Suggest position sizing changes based on P&L and risk metrics"''',
+    description='P&L Query:',
+    layout=widgets.Layout(width='90%', height='120px')
+)
+
+submit_button = widgets.Button(description="Analyze P&L Strategy", button_style='success')
+output = widgets.Output()
+
+def on_submit_clicked(b):
+    user_query = query_box.value.strip()
+    output.clear_output()
+
+    with output:
+        if not user_query:
+            display(HTML("<p>Please enter a P&L analysis query.</p>"))
+            return
+
+        display(HTML(f"<p><b>P&L Analysis Query:</b> {user_query}</p>"))
+
+        if not GOOGLE_API_KEY:
+            display(HTML("<p style='color: red;'>Please set your Google API key.</p>"))
+            return
+
+        try:
+            # Prepare P&L context for Gemini
+            pnl_context = {
+                "pnl_summary": pnl_df.to_dict('records') if not pnl_df.empty else [],
+                "portfolio_metrics": {
+                    "total_unrealized_pnl": float(pnl_df['TotalUnrealizedPnL'].sum()) if not pnl_df.empty else 0,
+                    "total_mtm_value": float(pnl_df['MTM_Value'].sum()) if not pnl_df.empty else 0,
+                    "avg_pnl_percent": float(pnl_df['PnL_Percent'].mean()) if not pnl_df.empty else 0,
+                    "total_monthly_carry": float(pnl_df['MonthlyCarry'].sum()) if not pnl_df.empty else 0,
+                    "total_duration_risk": float(pnl_df['DurationRisk'].sum()) if not pnl_df.empty else 0
+                }
+            }
+
+            prompt = f"""
+            You are an expert MBS trader and risk manager. Analyze the P&L data and provide specific trading recommendations.
+
+            FOCUS ON:
+            1. Position-level P&L analysis and holding period recommendations (3-6 months)
+            2. Risk-adjusted returns considering duration, carry, and prepayment risk
+            3. Specific entry/exit strategies with price targets
+            4. Portfolio optimization suggestions
+            5. Interest rate scenario analysis impact on P&L
+
+            P&L DATA:
+            {json.dumps(pnl_context, indent=2)}
+
+            TRADER QUERY:
+            {user_query}
+
+            PROVIDE:
+            - Specific recommendations for each position
+            - Quantitative P&L projections for 3-6 month horizon
+            - Risk management suggestions
+            - Market scenario analysis
+
+            Format with clear sections and actionable insights.
+            """
+
+            response = model.generate_content(prompt)
+            display(Markdown(response.text))
+
+        except Exception as e:
+            display(HTML(f"<p style='color: red;'>Error: {str(e)}</p>"))
+
+submit_button.on_click(on_submit_clicked)
+
+# Display interface
+display(HTML("""
+<div style="background: #2c3e50; padding: 15px; border-radius: 8px; color: white; margin-bottom: 15px;">
+    <h3>💰 MBS P&L Analytics & Trading Strategy</h3>
+    <p>Get specific P&L insights and holding period recommendations for your MBS positions</p>
+</div>
+"""))
+
+display(query_box)
+display(submit_button)
+display(output)
+
+# Quick P&L Dashboard
+def display_pnl_dashboard():
+    if pnl_df.empty:
+        return "<p>No P&L data available</p>"
+
+    winners = pnl_df[pnl_df['TotalUnrealizedPnL'] > 0]
+    losers = pnl_df[pnl_df['TotalUnrealizedPnL'] < 0]
+
+    dashboard_html = f"""
+    <div style="display: flex; gap: 15px; margin: 20px 0;">
+        <div style="background: #d4edda; padding: 15px; border-radius: 5px; flex: 1;">
+            <h4 style="margin: 0; color: #155724;">📈 Winning Positions</h4>
+            <p style="margin: 5px 0;"><strong>Count:</strong> {len(winners)}</p>
+            <p style="margin: 5px 0;"><strong>Total P&L:</strong> ${winners['TotalUnrealizedPnL'].sum():,.2f}</p>
+        </div>
+        <div style="background: #f8d7da; padding: 15px; border-radius: 5px; flex: 1;">
+            <h4 style="margin: 0; color: #721c24;">📉 Losing Positions</h4>
+            <p style="margin: 5px 0;"><strong>Count:</strong> {len(losers)}</p>
+            <p style="margin: 5px 0;"><strong>Total P&L:</strong> ${losers['TotalUnrealizedPnL'].sum():,.2f}</p>
+        </div>
+        <div style="background: #e2e3e5; padding: 15px; border-radius: 5px; flex: 1;">
+            <h4 style="margin: 0; color: #383d41;"> Portfolio Total</h4>
+            <p style="margin: 5px 0;"><strong>Net P&L:</strong> ${pnl_df['TotalUnrealizedPnL'].sum():,.2f}</p>
+            <p style="margin: 5px 0;"><strong>Return %:</strong> {pnl_df['PnL_Percent'].mean():.2f}%</p>
+        </div>
+    </div>
+    """
+    return dashboard_html
+
+display(HTML(display_pnl_dashboard()))
+
+print("\nSAMPLE QUERIES FOR TRADERS:")
+print("=" * 50)
+print("• 'Analyze carry vs duration risk for next 6 months'")
+print("• 'Which position should I trim based on P&L and risk?'")
+print("• 'Project P&L if rates rise 50bps over 3 months'")
+print("• 'Best positions to hold through next Fed meeting'")
+print("• 'Suggest hedge ratios based on current P&L exposure'")
+print("=" * 50)
