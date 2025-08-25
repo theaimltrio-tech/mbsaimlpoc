@@ -1,0 +1,21 @@
+set PYTHONHTTPSVERIFY=0
+
+pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org boto3
+
+import boto3
+import urllib3
+import os
+import ssl
+
+# Disable all SSL verification warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+
+# Configure Bedrock client with SSL disabled
+bedrock_runtime = boto3.client(
+    service_name='bedrock-runtime',
+    region_name='us-east-1',
+    verify=False,
+    use_ssl=True
+)
