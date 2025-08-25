@@ -1,0 +1,353 @@
+# MBS P&L Analytics for Trading Decisions - AWS Bedrock Version
+# Install required packages
+# !pip install boto3 pandas numpy
+
+import json
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import boto3
+from botocore.exceptions import ClientError
+
+# Configure AWS Bedrock
+# Make sure you have AWS credentials configured (via AWS CLI, environment variables, or IAM roles)
+bedrock_runtime = boto3.client(
+    service_name='bedrock-runtime',
+    region_name='us-east-1'  # Change to your preferred region
+)
+
+# Model configuration for Claude
+MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"  # You can also use claude-3-haiku or claude-3-opus
+
+# Define instrument_data
+instrument_data = [
+    {
+        "CUSIP": "31453441V5",
+        "Coupon": 3.4,
+        "WAM": 187,
+        "PoolNumber": "MA8298",
+        "IssueDate": "2021-01-26",
+        "CurrentUPB": 97615.51,
+        "LoanCount": 175,
+        "CPR": 128.45,
+        "CPR1Month": 135.2,
+        "CPR3Month": 131.2,
+        "CPR6Month": 125.8,
+        "CPR12Month": 122.1,
+        "CPR24Month": 118.7,
+        "PrimaryState": "CA",
+        "StatePercentage": 55,
+        "AccrualMethod": "30/360",
+        "CouponFrequency": 12,
+        "WALA": 32,
+        "MaturityTerm": 15,
+        "CurrentPrice": 98.25,
+        "AccruedInterest": 0.85,
+        "LastUpdated": "2025-08-03"
+    }
+]
+
+# Define position_data
+position_data = [
+    {
+        "PositionId": "POS0000",
+        "CUSIP": "3149443QJ0",
+        "Status": "Open",
+        "SettlementDate": "2024-12-02",
+        "OriginalFace": 1379169.79,
+        "CurrentFace": 562182.3,
+        "NoYears": 10,
+        "Book": "A101",
+        "StartingFace": 1351586.39,
+        "10YearEquivalence": 534073.19,
+        "CostBasis": 96.50,
+        "AccruedInterestAtPurchase": 0.75,
+        "PurchaseDate": "2024-11-15",
+        "AverageCost": 97.25,
+        "UnrealizedPnL": -1037392.92
+    }
+]
+
+# Define price_data
+price_data = [
+    {
+        "PriceId": "PR0000",
+        "CUSIP": "31483636I1",
+        "BusinessDate": "2024-12-09",
+        "OpenPrice": 97.61,
+        "ClosePrice": 96.63,
+        "AccruedInterest": 1.38,
+        "CleanPrice": 95.25,
+        "DirtyPrice": 96.63
+    }
+]
+
+# Define trade_data
+trade_data = [
+    {
+        "TradeId": "TR0000",
+        "CUSIP": "31422174XW",
+        "PositionId": "POS0014",
+        "PriceId": "PR0021",
+        "TradeQuantity": 1778295.17,
+        "Side": "Sell",
+        "CounterpartyAccountId": "CP_ICICIBank",
+        "TradeDate": "2025-05-12",
+        "TradePriceClean": 100.55,
+        "AccruedInterest": 1.05,
+        "TradePriceDirty": 101.60,
+        "Commission": 250.00,
+        "OtherFees": 50.00,
+        "Book": "A101",
+        "TradeNotional": 18062237.33,
+        "RealizedPnL": 9138863.92
+    }
+]
+
+def call_bedrock_claude(prompt):
+    """Call AWS Bedrock Claude model"""
+    try:
+        # Prepare the request body
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 4000,
+            "temperature": 0.1,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        }
+
+        # Make the request to Bedrock
+        response = bedrock_runtime.invoke_model(
+            modelId=MODEL_ID,
+            body=json.dumps(body)
+        )
+
+        # Parse the response
+        response_body = json.loads(response['body'].read())
+        return response_body['content'][0]['text']
+
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        return f"AWS Bedrock Error ({error_code}): {error_message}"
+    except Exception as e:
+        return f"Error calling Bedrock: {str(e)}"
+
+def calculate_pnl_metrics():
+    """Calculate comprehensive P&L metrics for MBS positions"""
+
+    # Convert to DataFrames
+    instruments_df = pd.DataFrame(instrument_data)
+    positions_df = pd.DataFrame(position_data)
+    prices_df = pd.DataFrame(price_data)
+    trades_df = pd.DataFrame(trade_data)
+
+    # Merge data for P&L calculation
+    pnl_data = []
+
+    for _, position in positions_df.iterrows():
+        cusip = position['CUSIP']
+
+        # For demo purposes, we'll use the first instrument record
+        # In production, you'd match by CUSIP
+        instrument = instruments_df.iloc[0]
+
+        # For demo purposes, we'll use the first price record
+        # In production, you'd match by CUSIP and get latest price
+        current_price_data = prices_df.iloc[0]
+
+        # Get trade data
+        position_trades = trades_df[trades_df['PositionId'] == position['PositionId']]
+
+        # Current values
+        current_face = position['CurrentFace']
+        current_clean_price = current_price_data['CleanPrice']
+        current_dirty_price = current_price_data['DirtyPrice']
+        current_accrued = current_price_data['AccruedInterest']
+
+        # Cost basis
+        cost_basis_clean = position['CostBasis']
+        cost_basis_dirty = position['AverageCost']
+
+        # P&L Calculations
+        # 1. Price P&L (Clean)
+        price_pnl_clean = (current_clean_price - cost_basis_clean) * current_face / 100
+
+        # 2. Price P&L (Dirty)
+        price_pnl_dirty = (current_dirty_price - cost_basis_dirty) * current_face / 100
+
+        # 3. Accrued Interest P&L
+        accrued_pnl = (current_accrued - position['AccruedInterestAtPurchase']) * current_face / 100
+
+        # 4. Total Unrealized P&L
+        total_unrealized_pnl = price_pnl_clean + accrued_pnl
+
+        # 5. Mark-to-Market Value
+        mtm_value = current_dirty_price * current_face / 100
+
+        # 6. Cost Value
+        cost_value = cost_basis_dirty * current_face / 100
+
+        # 7. Daily P&L (if we had previous day data)
+        daily_pnl = (current_price_data['ClosePrice'] - current_price_data['OpenPrice']) * current_face / 100
+
+        # 8. Trade costs
+        total_trade_costs = position_trades['Commission'].sum() + position_trades['OtherFees'].sum()
+
+        # 9. Duration-adjusted P&L risk (simplified)
+        duration_years = instrument['WAM'] / 12
+        duration_risk = abs(price_pnl_clean) * (duration_years / 100)  # 1% rate move impact
+
+        # 10. Carry (monthly coupon accrual)
+        monthly_carry = (instrument['Coupon'] / 12) * current_face / 100
+
+        pnl_record = {
+            'CUSIP': cusip,
+            'PositionId': position['PositionId'],
+            'Book': position['Book'],
+            'CurrentFace': current_face,
+            'CurrentCleanPrice': current_clean_price,
+            'CurrentDirtyPrice': current_dirty_price,
+            'CostBasisClean': cost_basis_clean,
+            'CostBasisDirty': cost_basis_dirty,
+            'PricePnL_Clean': round(price_pnl_clean, 2),
+            'PricePnL_Dirty': round(price_pnl_dirty, 2),
+            'AccruedPnL': round(accrued_pnl, 2),
+            'TotalUnrealizedPnL': round(total_unrealized_pnl, 2),
+            'MTM_Value': round(mtm_value, 2),
+            'CostValue': round(cost_value, 2),
+            'DailyPnL': round(daily_pnl, 2),
+            'TradeCosts': round(total_trade_costs, 2),
+            'DurationRisk': round(duration_risk, 2),
+            'MonthlyCarry': round(monthly_carry, 2),
+            'PnL_Percent': round((total_unrealized_pnl / cost_value) * 100, 2) if cost_value != 0 else 0,
+            'Coupon': instrument['Coupon'],
+            'WAM_Months': instrument['WAM'],
+            'CPR_Current': instrument['CPR'],
+            'State': instrument['PrimaryState']
+        }
+
+        pnl_data.append(pnl_record)
+
+    return pd.DataFrame(pnl_data)
+
+# Calculate P&L metrics
+try:
+    pnl_df = calculate_pnl_metrics()
+    print("✅ P&L calculation completed successfully!")
+    print(f"Positions analyzed: {len(pnl_df)}")
+    print(f"Total Unrealized P&L: ${pnl_df['TotalUnrealizedPnL'].sum():,.2f}")
+    print(f"Total MTM Value: ${pnl_df['MTM_Value'].sum():,.2f}")
+
+    # Display P&L summary
+    print("\n=== P&L SUMMARY BY POSITION ===")
+    for _, row in pnl_df.iterrows():
+        status = "📈 PROFIT" if row['TotalUnrealizedPnL'] > 0 else "📉 LOSS"
+        print(f"{row['CUSIP']} ({row['Book']}): ${row['TotalUnrealizedPnL']:,.2f} ({row['PnL_Percent']:.2f}%) {status}")
+
+except Exception as e:
+    print(f"❌ Error calculating P&L: {str(e)}")
+    pnl_df = pd.DataFrame()
+
+# P&L Analysis Function (replaces the widget interface)
+def analyze_pnl_strategy(query):
+    """Analyze P&L strategy using AWS Bedrock Claude"""
+    if not query.strip():
+        return "Please enter a P&L analysis query."
+
+    print(f"\n🔍 P&L Analysis Query: {query}")
+    print("=" * 60)
+
+    if pnl_df.empty:
+        return "No P&L data available for analysis."
+
+    try:
+        # Prepare P&L context for Claude
+        pnl_context = {
+            "pnl_summary": pnl_df.to_dict('records'),
+            "portfolio_metrics": {
+                "total_unrealized_pnl": float(pnl_df['TotalUnrealizedPnL'].sum()),
+                "total_mtm_value": float(pnl_df['MTM_Value'].sum()),
+                "avg_pnl_percent": float(pnl_df['PnL_Percent'].mean()),
+                "total_monthly_carry": float(pnl_df['MonthlyCarry'].sum()),
+                "total_duration_risk": float(pnl_df['DurationRisk'].sum())
+            }
+        }
+
+        prompt = f"""You are an expert MBS trader and risk manager. Analyze the P&L data and provide specific trading recommendations.
+
+FOCUS ON:
+1. Position-level P&L analysis and holding period recommendations (3-6 months)
+2. Risk-adjusted returns considering duration, carry, and prepayment risk
+3. Specific entry/exit strategies with price targets
+4. Portfolio optimization suggestions
+5. Interest rate scenario analysis impact on P&L
+
+P&L DATA:
+{json.dumps(pnl_context, indent=2)}
+
+TRADER QUERY:
+{query}
+
+PROVIDE:
+- Specific recommendations for each position
+- Quantitative P&L projections for 3-6 month horizon
+- Risk management suggestions
+- Market scenario analysis
+
+Format with clear sections and actionable insights."""
+
+        response = call_bedrock_claude(prompt)
+        print(response)
+        return response
+
+    except Exception as e:
+        error_msg = f"Error analyzing P&L strategy: {str(e)}"
+        print(error_msg)
+        return error_msg
+
+# Quick P&L Dashboard
+def display_pnl_dashboard():
+    """Display P&L dashboard"""
+    if pnl_df.empty:
+        print("No P&L data available")
+        return
+
+    winners = pnl_df[pnl_df['TotalUnrealizedPnL'] > 0]
+    losers = pnl_df[pnl_df['TotalUnrealizedPnL'] < 0]
+
+    print("\n" + "=" * 60)
+    print("💰 MBS P&L DASHBOARD")
+    print("=" * 60)
+    print(f"📈 WINNING POSITIONS: {len(winners)} | Total P&L: ${winners['TotalUnrealizedPnL'].sum():,.2f}")
+    print(f"📉 LOSING POSITIONS: {len(losers)} | Total P&L: ${losers['TotalUnrealizedPnL'].sum():,.2f}")
+    print(f"💼 PORTFOLIO TOTAL: Net P&L: ${pnl_df['TotalUnrealizedPnL'].sum():,.2f} | Return: {pnl_df['PnL_Percent'].mean():.2f}%")
+    print("=" * 60)
+
+# Display dashboard
+display_pnl_dashboard()
+
+print("\n🚀 SAMPLE QUERIES FOR TESTING:")
+print("=" * 50)
+sample_queries = [
+    "Should I hold position POS0000 for next 3-6 months based on P&L outlook?",
+    "Analyze carry vs duration risk for next 6 months",
+    "Which position should I trim based on P&L and risk?",
+    "Project P&L if rates rise 50bps over 3 months",
+    "Best positions to hold through next Fed meeting",
+    "Suggest hedge ratios based on current P&L exposure"
+]
+
+for i, query in enumerate(sample_queries, 1):
+    print(f"{i}. {query}")
+
+print("=" * 50)
+print("\nTo test, call: analyze_pnl_strategy('your query here')")
+
+# Example usage:
+print("\n🧪 RUNNING SAMPLE ANALYSIS...")
+sample_response = analyze_pnl_strategy("Should I hold position POS0000 for next 3-6 months based on P&L outlook?")
